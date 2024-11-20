@@ -2,7 +2,7 @@
 //  ContentView.swift
 //  Lab5MLAS
 //
-//  Created by Zareenah Murad on 11/19/24.
+//  Alex Geer, Hamna Tameez, Zareenah Murad
 //
 
 import SwiftUI

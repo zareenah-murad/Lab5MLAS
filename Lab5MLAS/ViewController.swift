@@ -181,33 +181,53 @@ extension ViewController {
     }
     
     // Calibration event has occurred, send to server
-    func largeMotionEventOccurred(){
-        if(self.isCalibrating){
-            //send a labeled example
-            if(self.calibrationStage != .notCalibrating && self.isWaitingForMotionData)
-            {
+    func largeMotionEventOccurred() {
+        if self.isCalibrating {
+            // Send a labeled example
+            if self.calibrationStage != .notCalibrating && self.isWaitingForMotionData {
                 self.isWaitingForMotionData = false
                 
-                // send data to the server with label
-                self.client.sendData(self.ringBuffer.getDataAsVector(),
-                                     withLabel: self.calibrationStage.rawValue)
+                // Convert the ring buffer data to a suitable format
+                let featureData = self.ringBuffer.getDataAsVector()
+                let label = self.calibrationStage.rawValue
                 
+                // Prepare JSON payload
+                let payload: [String: Any] = [
+                    "feature": featureData,
+                    "label": label
+                ]
+                
+                // Serialize to JSON data
+                if let jsonData = try? JSONSerialization.data(withJSONObject: payload) {
+                    // Send labeled data to the server
+                    self.client.sendHandwritingData(imageData: jsonData) { success in
+                        if success {
+                            print("Labeled data sent successfully for label: \(label)")
+                        } else {
+                            print("Failed to send labeled data for label: \(label)")
+                        }
+                    }
+                }
+                
+                // Proceed to the next calibration stage
                 self.nextCalibrationStage()
             }
-        }
-        else
-        {
-            if(self.isWaitingForMotionData)
-            {
+        } else {
+            if self.isWaitingForMotionData {
                 self.isWaitingForMotionData = false
-                //predict a label
-                self.client.sendData(self.ringBuffer.getDataAsVector())
-                // dont predict again for a bit
-                setDelayedWaitingToTrue(2.0)
                 
+                // Convert the ring buffer data to a suitable format
+                let featureData = self.ringBuffer.getDataAsVector()
+                
+                // Send unlabeled data to the server for prediction
+                self.client.sendData(featureData)
+                
+                // Prevent another prediction for 2 seconds
+                setDelayedWaitingToTrue(2.0)
             }
         }
     }
+
 }
 
 //MARK: Calibration UI Functions
@@ -339,6 +359,32 @@ extension ViewController {
             setDelayedWaitingToTrue(1.0)
             break
         }
+    }
+    
+    func processAndSendImage(_ image: UIImage) {
+        guard let resizedImage = resizeImage(image, to: CGSize(width: 32, height: 32)),
+              let imageData = resizedImage.pngData() else {
+            print("Failed to process image")
+            return
+        }
+
+        client.sendHandwritingData(imageData: imageData) { success in
+            DispatchQueue.main.async {
+                if success {
+                    print("Prediction sent successfully")
+                } else {
+                    print("Failed to send prediction")
+                }
+            }
+        }
+    }
+
+    func resizeImage(_ image: UIImage, to size: CGSize) -> UIImage? {
+        UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
+        image.draw(in: CGRect(origin: .zero, size: size))
+        let resizedImage = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return resizedImage
     }
     
     
